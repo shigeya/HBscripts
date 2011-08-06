@@ -1,0 +1,20 @@
+#!/usr/bin/env ruby
+# -*- coding: utf-8 -*-
+
+$:.unshift(File.dirname(__FILE__))
+require 'handbrake'
+
+Encoding.default_external = "UTF-8"
+
+discs = [ ]
+
+ARGV.each do |file|
+  discs.push(HandBrake::Disc.new(file))
+end
+
+discs.each do |disc|
+  main_feature = disc.main_feature
+
+  puts "#{disc.filename} : Chapters: #{main_feature.chapters.size}, #{main_feature.total_duration}"
+end
+

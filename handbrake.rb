@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+require 'time'
+
 module HandBrake
 
   class CLI
@@ -10,7 +12,6 @@ module HandBrake
     end
 
     def self.exec_capture(cmd)
-      STDERR.puts "ExecCapture: #{cmd}"
       `#{cmd} 2>&1`
     end
 
@@ -19,25 +20,72 @@ module HandBrake
     end
   end
 
-  class Disc
+  class Chapter
+    attr_reader :params, :chapter, :duration
 
-    attr_reader :disc_params
+    def initialize(params)
+      @params = params
+      @chapter = params[:chapter]
+      @duration = params[:duration]
+    end
+  end
 
-    def initialize(file)
-      @disc_file = file
-      scan
+  class Title
+    include Enumerable
+
+    attr_reader :params, :title, :chapters
+
+    def initialize(params)
+      @params = params
+      @chapters = [ ]
+      @params[:chapters].each do |k,v|
+        @chapters << Chapter.new(v)
+      end
+      @title = params[:title]
     end
 
-    def scan
-      r = CLI::scan(@disc_file)
-      list = { }
+    def each
+      @chapters.each { |v| yield v }
+    end
+
+    def total_duration
+      base = Time.parse("00:00:00")
+      base += @chapters.map{|v| Time.parse(v.duration) - base }.inject(:+)
+      base.strftime("%H:%M:%S")
+    end
+  end
+
+  class Disc
+    include Enumerable
+
+    attr_reader :filename, :params, :main_feature, :titles
+
+    def initialize(file)
+      @filename = file
+      @main_feature = nil
+      @titles = { }
+      read
+      @params[:titles].each do |k,v|
+        title = Title.new(v)
+        @titles[ v[:title] ] = title
+        @main_feature = title if v[:main_feature] == true
+      end
+    end
+
+    def each
+      @titles.each { |k,v| yield v }
+    end
+
+    def read
+      r = CLI::scan(@filename)
+      list = { :titles=> { } }
       cur = nil
       r.split(/\n/).grep(/^(\s|\+)/).each do |l|
         l.sub!(/^\s+/, '')
         case l
         when /\+ title (\d+):/
-          list[cur[:track_no]] = cur if cur != nil
-          cur = { :track_no => $1.to_i }
+          list[:titles][cur[:title]] = cur if cur != nil
+          cur = { :title => $1.to_i }
         when /\+ Main Feature/
           cur[:main_feature] = true
         when /\+ vts (\d+), ttn (\d), cells (\d+)\-\>(\d+) \((\d+) blocks\)/
@@ -58,7 +106,7 @@ module HandBrake
         when /\+ chapters:/
           cur[:chapters] = { }
         when /\+ (\d+): cells (\d+)\-\>(\d+), (\d+) blocks, duration (\d\d:\d\d:\d\d)/
-          cur[:chapters][$1.to_i] = { :cell_from=>$2.to_i, :cell_to=>$3.to_i, :blocks=>$4.to_i, :duration=>$5 }
+          cur[:chapters][$1.to_i] = { :chapter=>$1.to_i, :cell_from=>$2.to_i, :cell_to=>$3.to_i, :blocks=>$4.to_i, :duration=>$5 }
         when /\+ audio tracks:/
           cur[:audio_tracks] = { }
         when /\+ (\d+), ([^,]+), ([^,]+)Hz, ([^,]+)bps/
@@ -71,7 +119,7 @@ module HandBrake
         end
       end
       list[cur[:track_no]] = cur
-      @disc_params = list
+      @params = list
     end
   end
 
