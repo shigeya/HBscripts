@@ -37,20 +37,30 @@ module HandBrake
 
     def initialize(params)
       @params = params
-      @chapters = [ ]
+      @chapters = { }
       @params[:chapters].each do |k,v|
-        @chapters << Chapter.new(v)
+        @chapters[k] = Chapter.new(v)
       end
       @title = params[:title]
     end
 
     def each
-      @chapters.each { |v| yield v }
+      @chapters.each { |k,v| yield v }
     end
 
     def total_duration
       base = Time.parse("00:00:00")
-      base += @chapters.map{|v| Time.parse(v.duration) - base }.inject(:+)
+      base += @chapters.map{|k,v| Time.parse(v.duration) - base }.inject(:+)
+      base.strftime("%H:%M:%S")
+    end
+
+    def range_array(s)
+      s.gsub(/(\d+)\s*\-\s*(\d+)/) {($1..$2).to_a.join(",") } .split(/\s*,\s*/).map{|v| v.to_i}
+    end
+
+    def calc_duration(chaps)
+      base = Time.parse("00:00:00")
+      base += range_array(chaps).map{|c| Time.parse(chapters[c].duration) - base }.inject(:+)
       base.strftime("%H:%M:%S")
     end
   end
@@ -59,6 +69,7 @@ module HandBrake
     include Enumerable
 
     attr_reader :filename, :params, :main_feature, :titles
+    attr_accessor :disc_number
 
     def initialize(file, options = {})
       @filename = file
@@ -71,6 +82,7 @@ module HandBrake
         @titles[ v[:title] ] = title
         @main_feature = title if v[:main_feature] == true
       end
+      @disc_number = nil
     end
 
     def each
