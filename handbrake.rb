@@ -60,8 +60,9 @@ module HandBrake
 
     attr_reader :filename, :params, :main_feature, :titles
 
-    def initialize(file)
+    def initialize(file, options = {})
       @filename = file
+      @options = options
       @main_feature = nil
       @titles = { }
       read
@@ -81,6 +82,7 @@ module HandBrake
       list = { :titles=> { } }
       cur = nil
       r.split(/\n/).grep(/^(\s|\+)/).each do |l|
+        STDERR.puts ">> #{l}" if @options.has_key?(:debug)
         l.sub!(/^\s+/, '')
         case l
         when /\+ title (\d+):/
@@ -118,7 +120,7 @@ module HandBrake
           STDERR.puts ">> NOT HANDLED: #{l}"
         end
       end
-      list[cur[:track_no]] = cur
+      list[:titles][cur[:title]] = cur if cur != nil
       @params = list
     end
   end
